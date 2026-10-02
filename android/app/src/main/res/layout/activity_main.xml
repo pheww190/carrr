@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0A0E13"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/status_idle"
+        android:textColor="#9FB3C8"
+        android:textSize="15sp"
+        android:paddingBottom="4dp" />
+
+    <TextView
+        android:id="@+id/telemetry"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="L: 0   R: 0"
+        android:textColor="#38E0A5"
+        android:textSize="14sp"
+        android:fontFamily="monospace"
+        android:paddingBottom="8dp" />
+
+    <!-- ============ DEVICE LIST ============ -->
+    <LinearLayout
+        android:id="@+id/scanPanel"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/scanBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scan"
+            android:backgroundTint="#1B2735"
+            android:textColor="#CFE3F5" />
+
+        <ListView
+            android:id="@+id/deviceList"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="8dp"
+            android:divider="#1E2A36"
+            android:dividerHeight="1dp" />
+    </LinearLayout>
+
+    <!-- ============ DRIVE ============ -->
+    <LinearLayout
+        android:id="@+id/drivePanel"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <com.example.blerover.JoystickView
+            android:id="@+id/joystick"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/stop"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:layout_marginTop="12dp"
+            android:text="@string/stop"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:backgroundTint="#C11F3A"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/disconnect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/disconnect"
+            android:backgroundTint="#1B2735"
+            android:textColor="#CFE3F5" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rover</string>
+    <string name="status_idle">Tap SCAN to list devices</string>
+    <string name="scan">SCAN / REFRESH</string>
+    <string name="stop">STOP</string>
+    <string name="disconnect">DISCONNECT</string>
+</resources>

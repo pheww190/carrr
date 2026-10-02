@@ -1,0 +1,30 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.example.blerover'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.blerover"
+        minSdk 29            // Android 10+
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// No external dependencies: plain Android framework only, so the build
+// stays small and fast.
+dependencies { }
