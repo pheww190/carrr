@@ -60,6 +60,16 @@
         android:orientation="vertical"
         android:visibility="gone">
 
+        <TextView
+            android:id="@+id/input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="NEUTRAL"
+            android:textColor="#6FD3FF"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:paddingBottom="6dp" />
+
         <com.example.blerover.JoystickView
             android:id="@+id/joystick"
             android:layout_width="match_parent"
@@ -69,13 +79,61 @@
         <Button
             android:id="@+id/stop"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
-            android:layout_marginTop="12dp"
+            android:layout_height="68dp"
+            android:layout_marginTop="10dp"
             android:text="@string/stop"
             android:textSize="22sp"
             android:textStyle="bold"
             android:backgroundTint="#C11F3A"
             android:textColor="#FFFFFF" />
+
+        <!-- calibration: tap to flip, no rebuild needed -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/invL"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:text="INV L"
+                android:textSize="12sp"
+                android:backgroundTint="#1B2735"
+                android:textColor="#CFE3F5" />
+
+            <Button
+                android:id="@+id/invR"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:text="INV R"
+                android:textSize="12sp"
+                android:backgroundTint="#1B2735"
+                android:textColor="#CFE3F5" />
+
+            <Button
+                android:id="@+id/swap"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:text="SWAP"
+                android:textSize="12sp"
+                android:backgroundTint="#1B2735"
+                android:textColor="#CFE3F5" />
+
+            <Button
+                android:id="@+id/invS"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:text="INV S"
+                android:textSize="12sp"
+                android:backgroundTint="#1B2735"
+                android:textColor="#CFE3F5" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/disconnect"
