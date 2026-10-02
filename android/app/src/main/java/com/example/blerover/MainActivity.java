@@ -43,9 +43,11 @@ import java.util.UUID;
  *
  *   - SCAN builds one list of devices: already-paired ones first (tagged
  *     PAIRED), then live scan results (tagged ROVER if they advertise our
- *     service, NEARBY otherwise). Name + MAC + RSSI are shown, so the row you
- *     tap is unambiguous.
+ *     service, NEARBY otherwise). Name + MAC + RSSI are shown.
  *   - tap a row to connect. Nothing connects on its own.
+ *   - the joystick is sectored: it reports one of four snapped directions
+ *     (FRONT / RIGHT / BACK / LEFT) plus a magnitude, so a small angular
+ *     error near an axis does not leak into the neighbouring direction.
  *
  * Frame (matches rover_proto.h):
  *   [0] throttle int8  [1] steering int8  [2] flags uint8  [3] seq uint8
@@ -84,10 +86,7 @@ public class MainActivity extends Activity {
     private boolean scanning = false;
     private boolean ready = false;
 
-    /* ---------------- list state ----------------
-     * NOTE: `items` must NOT be the list handed to ArrayAdapter. ArrayAdapter
-     * uses the list you pass as its own backing store, so clear()+addAll() on
-     * the same object empties it. The adapter gets its own list. */
+    /* ---------------- list state ---------------- */
     private final Map<String, ScanResult> found = new LinkedHashMap<>();
     private final List<String> items = new ArrayList<>();
     private final List<BluetoothDevice> listedDevices = new ArrayList<>();
@@ -99,7 +98,8 @@ public class MainActivity extends Activity {
     private int cfgTries;
 
     /* ---------------- drive state ---------------- */
-    private volatile float axisX = 0f, axisY = 0f;
+    private volatile JoystickView.Dir dir = JoystickView.Dir.NONE;
+    private volatile float mag = 0f;
     private volatile boolean eStop = false;
     private int seq = 0;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -146,10 +146,19 @@ public class MainActivity extends Activity {
                 handler.postDelayed(this, SEND_MS);
                 return;
             }
-            int throttle = clamp(Math.round(axisY * 100f), -100, 100);
-            int steer    = clamp(Math.round(axisX * 100f), -100, 100);
-            byte flags   = eStop ? (byte) 0x02 : (byte) 0x00;
-            if (eStop) { throttle = 0; steer = 0; }
+
+            int throttle = 0, steer = 0;
+            if (!eStop) {
+                int m = Math.round(mag * 100f);
+                switch (dir) {
+                    case FRONT: throttle =  m; break;
+                    case BACK:  throttle = -m; break;
+                    case RIGHT: steer    =  m; break;
+                    case LEFT:  steer    = -m; break;
+                    default: break;              // NONE -> neutral
+                }
+            }
+            byte flags = eStop ? (byte) 0x02 : (byte) 0x00;
 
             byte[] frame = { (byte) throttle, (byte) steer, flags, (byte) (seq++ & 0xFF) };
             cmdChar.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
@@ -159,10 +168,6 @@ public class MainActivity extends Activity {
             handler.postDelayed(this, SEND_MS);
         }
     };
-
-    private static int clamp(int v, int lo, int hi) {
-        return v < lo ? lo : (v > hi ? hi : v);
-    }
 
     /* =====================================================
      * lifecycle
@@ -187,11 +192,9 @@ public class MainActivity extends Activity {
                                          new ArrayList<>());
         deviceList.setAdapter(listAdapter);
 
-        joystick.setListener(new JoystickView.Listener() {
-            @Override public void onMove(float x, float y) {
-                axisX = x;
-                axisY = y;
-            }
+        joystick.setListener((d, m) -> {
+            dir = d;
+            mag = m;
         });
 
         scanBtn.setOnClickListener(v -> {
@@ -233,7 +236,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (hasPerms()) {
-            refreshList();            // show paired devices immediately
+            refreshList();
             if (!ready) startScan();
         } else {
             requestPermissions(requiredPerms(), REQ_PERMS);
@@ -243,8 +246,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        axisX = 0f;
-        axisY = 0f;
+        dir = JoystickView.Dir.NONE;
+        mag = 0f;
         eStop = true;
     }
 
@@ -407,8 +410,8 @@ public class MainActivity extends Activity {
         stopScan();
         closeGatt();
         ready = false;
-        axisX = 0f;
-        axisY = 0f;
+        dir = JoystickView.Dir.NONE;
+        mag = 0f;
         eStop = true;
         targetDevice = device;
         connectTries = 0;
@@ -535,10 +538,6 @@ public class MainActivity extends Activity {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     onReady();
                 } else if (cfgTries < MAX_CFG_TRIES) {
-                    // The config characteristic is encrypted. The very first
-                    // protected access is often what makes Android bring the
-                    // link up encrypted, and that first attempt fails - so
-                    // retry a few times before giving up.
                     cfgTries++;
                     statusText.setText("Securing link\u2026 (" + cfgTries + "/" + MAX_CFG_TRIES + ")");
                     handler.postDelayed(() -> { if (gatt != null) writeCfg(gatt); }, 700);
@@ -580,7 +579,6 @@ public class MainActivity extends Activity {
         cfgChar.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
         cfgChar.setValue(DEFAULT_CFG);
         if (!g.writeCharacteristic(cfgChar)) {
-            // queue busy - try again shortly
             handler.postDelayed(() -> { if (gatt != null) writeCfg(gatt); }, 300);
         }
     }
