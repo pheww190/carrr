@@ -1,0 +1,27 @@
+# ---- ESP-IDF ----
+firmware/build/
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/managed_components/
+firmware/dependencies.lock
+
+# ---- Android / Gradle ----
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.iml
+*.hprof
+
+# ---- build outputs ----
+*.apk
+*.ap_
+*.dex
+*.class
+
+# ---- editors / OS ----
+.vscode/
+.DS_Store
+Thumbs.db
