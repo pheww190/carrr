@@ -71,9 +71,11 @@ typedef struct __attribute__((packed)) {
     uint8_t flags;       /* ROVER_CFG_*                                    */
 } rover_cfg_t;
 
-/* Sensible defaults */
+/* Sensible defaults.
+ * turn_cap == max_speed so a full-stick spin is as fast as a full-stick
+ * forward; it used to be 140 vs 220, which made turns feel sluggish. */
 #define ROVER_CFG_DEFAULT_MAX_SPEED  220
-#define ROVER_CFG_DEFAULT_TURN_CAP   140
+#define ROVER_CFG_DEFAULT_TURN_CAP   220
 #define ROVER_CFG_DEFAULT_ACCEL       8
 #define ROVER_CFG_DEFAULT_DECEL      14
 #define ROVER_CFG_DEFAULT_EXPO       35

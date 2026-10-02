@@ -43,11 +43,12 @@ import java.util.UUID;
  *
  *   - SCAN builds one list of devices: already-paired ones first (tagged
  *     PAIRED), then live scan results (tagged ROVER if they advertise our
- *     service, NEARBY otherwise). Name + MAC + RSSI are shown.
- *   - tap a row to connect. Nothing connects on its own.
+ *     service, NEARBY otherwise).
  *   - the joystick is sectored: it reports one of four snapped directions
- *     (FRONT / RIGHT / BACK / LEFT) plus a magnitude, so a small angular
- *     error near an axis does not leak into the neighbouring direction.
+ *     plus a magnitude (distance from centre), so speed is proportional to
+ *     how far you push and a small angular error never leaks sideways.
+ *   - the INV L / INV R / SWAP / INV S buttons flip the calibration flags
+ *     and push a new CFG live - no rebuild needed.
  *
  * Frame (matches rover_proto.h):
  *   [0] throttle int8  [1] steering int8  [2] flags uint8  [3] seq uint8
@@ -67,13 +68,28 @@ public class MainActivity extends Activity {
     static final int MAX_CONNECT_TRIES = 3;
     static final int MAX_CFG_TRIES     = 4;
 
-    static final byte[] DEFAULT_CFG = { (byte) 220, (byte) 140, (byte) 8, (byte) 14, (byte) 35, (byte) 0 };
+    /* calibration flag bits - must match rover_proto.h */
+    static final int CFG_INVERT_L     = 0x01;
+    static final int CFG_INVERT_R     = 0x02;
+    static final int CFG_INVERT_STEER = 0x04;
+    static final int CFG_SWAP_LR      = 0x08;
+
+    /* tuning sent to the rover on connect (and whenever a flag is toggled).
+     * turn_cap == max_speed so a full-stick turn is as fast as a full-stick
+     * forward; it used to be 140 vs 220, which made turns feel sluggish. */
+    static final int CFG_MAX_SPEED = 220;
+    static final int CFG_TURN_CAP  = 220;
+    static final int CFG_ACCEL     = 8;
+    static final int CFG_DECEL     = 14;
+    static final int CFG_EXPO      = 35;
+
     static final String PAIRING_PIN = "123654";
 
     /* ---------------- UI ---------------- */
-    private TextView statusText, telemetryText;
+    private TextView statusText, telemetryText, inputText;
     private View scanPanel, drivePanel;
     private Button scanBtn, stopBtn, disconnectBtn;
+    private Button invLBtn, invRBtn, swapBtn, invSBtn;
     private ListView deviceList;
     private JoystickView joystick;
     private ArrayAdapter<String> listAdapter;
@@ -101,6 +117,7 @@ public class MainActivity extends Activity {
     private volatile JoystickView.Dir dir = JoystickView.Dir.NONE;
     private volatile float mag = 0f;
     private volatile boolean eStop = false;
+    private int cfgFlags = 0;
     private int seq = 0;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -137,6 +154,40 @@ public class MainActivity extends Activity {
     };
 
     /* =====================================================
+     * config frame
+     * ===================================================== */
+    private byte[] buildCfg() {
+        return new byte[] {
+                (byte) CFG_MAX_SPEED,
+                (byte) CFG_TURN_CAP,
+                (byte) CFG_ACCEL,
+                (byte) CFG_DECEL,
+                (byte) CFG_EXPO,
+                (byte) cfgFlags
+        };
+    }
+
+    private void sendCfg() {
+        if (gatt == null || cfgChar == null || !ready) return;
+        cfgChar.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+        cfgChar.setValue(buildCfg());
+        gatt.writeCharacteristic(cfgChar);
+    }
+
+    private void paintCalButtons() {
+        int on = 0xFF2B4058;
+        int off = 0xFF1B2735;
+        invLBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                (cfgFlags & CFG_INVERT_L) != 0 ? on : off));
+        invRBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                (cfgFlags & CFG_INVERT_R) != 0 ? on : off));
+        swapBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                (cfgFlags & CFG_SWAP_LR) != 0 ? on : off));
+        invSBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                (cfgFlags & CFG_INVERT_STEER) != 0 ? on : off));
+    }
+
+    /* =====================================================
      * send loop (50 Hz)
      * ===================================================== */
     private final Runnable sendLoop = new Runnable() {
@@ -149,6 +200,7 @@ public class MainActivity extends Activity {
 
             int throttle = 0, steer = 0;
             if (!eStop) {
+                // speed is proportional to how far the stick is pushed
                 int m = Math.round(mag * 100f);
                 switch (dir) {
                     case FRONT: throttle =  m; break;
@@ -169,6 +221,16 @@ public class MainActivity extends Activity {
         }
     };
 
+    private static String dirLabel(JoystickView.Dir d) {
+        switch (d) {
+            case FRONT: return "FRONT";
+            case BACK:  return "BACK";
+            case RIGHT: return "RIGHT";
+            case LEFT:  return "LEFT";
+            default:    return "NEUTRAL";
+        }
+    }
+
     /* =====================================================
      * lifecycle
      * ===================================================== */
@@ -179,6 +241,7 @@ public class MainActivity extends Activity {
 
         statusText    = findViewById(R.id.status);
         telemetryText = findViewById(R.id.telemetry);
+        inputText     = findViewById(R.id.input);
         scanPanel     = findViewById(R.id.scanPanel);
         drivePanel    = findViewById(R.id.drivePanel);
         scanBtn       = findViewById(R.id.scanBtn);
@@ -186,8 +249,11 @@ public class MainActivity extends Activity {
         joystick      = findViewById(R.id.joystick);
         stopBtn       = findViewById(R.id.stop);
         disconnectBtn = findViewById(R.id.disconnect);
+        invLBtn       = findViewById(R.id.invL);
+        invRBtn       = findViewById(R.id.invR);
+        swapBtn       = findViewById(R.id.swap);
+        invSBtn       = findViewById(R.id.invS);
 
-        // own backing list -> clear()/addAll() on `items` behaves
         listAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1,
                                          new ArrayList<>());
         deviceList.setAdapter(listAdapter);
@@ -195,6 +261,7 @@ public class MainActivity extends Activity {
         joystick.setListener((d, m) -> {
             dir = d;
             mag = m;
+            inputText.setText(dirLabel(d) + "   " + Math.round(m * 100) + "%");
         });
 
         scanBtn.setOnClickListener(v -> {
@@ -214,6 +281,13 @@ public class MainActivity extends Activity {
             stopBtn.setBackgroundTintList(
                     android.content.res.ColorStateList.valueOf(eStop ? 0xFF2B4058 : 0xFFC11F3A));
         });
+
+        // live calibration - flip a flag, it is sent immediately
+        invLBtn.setOnClickListener(v -> { cfgFlags ^= CFG_INVERT_L; paintCalButtons(); sendCfg(); });
+        invRBtn.setOnClickListener(v -> { cfgFlags ^= CFG_INVERT_R; paintCalButtons(); sendCfg(); });
+        swapBtn.setOnClickListener(v -> { cfgFlags ^= CFG_SWAP_LR;  paintCalButtons(); sendCfg(); });
+        invSBtn.setOnClickListener(v -> { cfgFlags ^= CFG_INVERT_STEER; paintCalButtons(); sendCfg(); });
+        paintCalButtons();
 
         BluetoothManager bm = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         adapter = (bm != null) ? bm.getAdapter() : null;
@@ -362,7 +436,6 @@ public class MainActivity extends Activity {
         items.clear();
         listedDevices.clear();
 
-        // 1) already-paired devices first - these are what we can talk to
         try {
             for (BluetoothDevice d : adapter.getBondedDevices()) {
                 String name = d.getName();
@@ -372,7 +445,6 @@ public class MainActivity extends Activity {
             }
         } catch (SecurityException ignored) { }
 
-        // 2) live scan results not already shown
         List<ScanResult> results = new ArrayList<>(found.values());
         Collections.sort(results, (a, b) -> b.getRssi() - a.getRssi());
         for (ScanResult r : results) {
@@ -577,7 +649,7 @@ public class MainActivity extends Activity {
     private void writeCfg(BluetoothGatt g) {
         if (cfgChar == null) { onReady(); return; }
         cfgChar.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
-        cfgChar.setValue(DEFAULT_CFG);
+        cfgChar.setValue(buildCfg());
         if (!g.writeCharacteristic(cfgChar)) {
             handler.postDelayed(() -> { if (gatt != null) writeCfg(gatt); }, 300);
         }
